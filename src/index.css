@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #05090c;
+  color: #ecf4f7;
+  --bg-app: #05090c;
+  --bg-panel: #0b1317;
+  --bg-panel-strong: #101b21;
+  --border-subtle: rgba(148, 163, 184, 0.14);
+  --border-strong: rgba(226, 232, 240, 0.18);
+  --text-soft: #9aa9b5;
+  --accent-cyan: #67e8f9;
+  --accent-emerald: #34d399;
+  --accent-amber: #fbbf24;
+  --accent-rose: #fb7185;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(8, 18, 23, 0.92) 0%, rgba(5, 9, 12, 1) 280px),
+    radial-gradient(circle at 30% 0%, rgba(103, 232, 249, 0.09), transparent 34rem),
+    var(--bg-app);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible {
+  outline: 3px solid rgba(103, 232, 249, 0.5);
+  outline-offset: 2px;
+}
+
+.deal-priority-high {
+  box-shadow:
+    inset 3px 0 rgba(52, 211, 153, 0.95),
+    0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.deal-priority-medium {
+  box-shadow:
+    inset 3px 0 rgba(34, 211, 238, 0.78),
+    0 16px 36px rgba(0, 0, 0, 0.14);
+}
+
+.deal-priority-low {
+  opacity: 0.82;
+}
+
+.deal-priority-normal {
+  box-shadow: inset 3px 0 rgba(148, 163, 184, 0.16);
+}
+
+* {
+  scrollbar-color: rgba(148, 163, 184, 0.28) transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.premium-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  button,
+  a,
+  input,
+  select {
+    min-height: 44px;
+  }
+}
