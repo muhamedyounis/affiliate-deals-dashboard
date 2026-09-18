@@ -105,6 +105,23 @@ export type ProductCatalogItem = {
   updated_at: string | null
 }
 
+export type DiscoverySettingPriority = 'OFF' | 'LOW' | 'NORMAL' | 'HIGH' | 'VERY_HIGH'
+
+export type DiscoverySetting = {
+  category: string
+  priority: DiscoverySettingPriority
+  discovery_enabled: boolean
+  dashboard_visible: boolean
+  telegram_alerts: boolean
+  updated_at: string
+}
+
+export type DiscoverySettingInsert = DiscoverySetting
+
+export type DiscoverySettingUpdate = Partial<Omit<DiscoverySetting, 'category' | 'updated_at'>> & {
+  updated_at?: string
+}
+
 export type DashboardActionKind = 'POST' | 'REJECT' | 'REGENERATE_CAPTION'
 export type DashboardActionStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED'
 
@@ -153,6 +170,12 @@ export type Database = {
         Row: ProductCatalogItem
         Insert: never
         Update: never
+        Relationships: []
+      }
+      discovery_settings: {
+        Row: DiscoverySetting
+        Insert: DiscoverySettingInsert
+        Update: DiscoverySettingUpdate
         Relationships: []
       }
       dashboard_actions: {
