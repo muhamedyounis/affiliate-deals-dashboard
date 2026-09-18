@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase'
 import type { DashboardAction, DashboardActionKind } from '../types/database'
 
 const activeStatuses = ['PENDING', 'PROCESSING'] as const
+const dashboardActionSelect = 'id, deal_id, action, requested_by, status, note, result, created_at, processed_at, processing_started_at, finished_at'
 
 function requireSupabase() {
   if (!supabase) {
@@ -31,7 +32,7 @@ export async function fetchDashboardActionById(actionId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('id', actionId)
     .single()
 
@@ -43,7 +44,7 @@ export async function fetchActiveActionForDeal(dealId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('deal_id', dealId)
     .in('status', [...activeStatuses])
     .order('created_at', { ascending: false })
@@ -58,7 +59,7 @@ export async function fetchActionHistoryForDeal(dealId: number, limit = 6) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('deal_id', dealId)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -95,3 +96,4 @@ export function subscribeToDashboardAction(actionId: number, onChange: (action: 
 export function isActionActive(action: DashboardAction | null | undefined) {
   return action?.status === 'PENDING' || action?.status === 'PROCESSING'
 }
+

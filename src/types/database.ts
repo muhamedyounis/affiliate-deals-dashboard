@@ -6,19 +6,19 @@ export type Deal = {
   id: number
   created_at: string | null
   source: string | null
-  source_message_id: string | null
-  source_text: string | null
-  original_amazon_url: string | null
-  amazon_url: string | null
-  affiliate_url: string | null
+  source_message_id?: string | null
+  source_text?: string | null
+  original_amazon_url?: string | null
+  amazon_url?: string | null
+  affiliate_url?: string | null
   asin: string | null
   parent_asin?: string | null
   product_family_key?: string | null
   canonical_product_name?: string | null
   variant_label?: string | null
   variant_count?: number | null
-  telegram_url: string | null
-  telegram_date: string | null
+  telegram_url?: string | null
+  telegram_date?: string | null
   product_name: string | null
   product_name_guess: string | null
   product_image?: string | null
@@ -35,10 +35,12 @@ export type Deal = {
   verified_image?: string | null
   live_verification_ok?: boolean | null
   verification_status?: string | null
-  caption: string | null
-  generated_caption: string | null
+  post_verification_code?: 'VERIFIED' | 'PRICE_CHANGED' | 'LIVE_PRICE_UNAVAILABLE' | 'PRODUCT_UNAVAILABLE' | 'WRONG_VARIANT' | 'VERIFICATION_FAILED' | string | null
+  post_verification_message?: string | null
+  caption?: string | null
+  generated_caption?: string | null
   status: DealStatus | null
-  published_message_id: string | null
+  published_message_id?: string | null
   source_trust: number | null
   deal_score: number | null
   quality_score?: number | null
@@ -48,8 +50,8 @@ export type Deal = {
   risk_flags: Json | null
   category: string | null
   subcategory: string | null
-  category_confidence: number | null
-  category_source: string | null
+  category_confidence?: number | null
+  category_source?: string | null
   amazon_price_drop_percent?: number | null
   history_status?: string | null
   history_samples_7d?: number | null
@@ -70,10 +72,10 @@ export type DealSighting = {
   created_at: string | null
   asin: string | null
   source: string | null
-  source_message_id: string | null
+  source_message_id?: string | null
   claimed_price: number | null
   claimed_discount: number | null
-  amazon_url: string | null
+  amazon_url?: string | null
 }
 
 export type WatcherHealth = {
@@ -93,8 +95,8 @@ export type ProductCatalogItem = {
   asin: string
   product_name: string | null
   product_image: string | null
-  amazon_url: string | null
-  affiliate_url: string | null
+  amazon_url?: string | null
+  affiliate_url?: string | null
   last_seen_price: number | null
   best_seen_price: number | null
   last_checked_at: string | null
@@ -135,6 +137,8 @@ export type DashboardAction = {
   result: Json | null
   created_at: string | null
   processed_at: string | null
+  processing_started_at?: string | null
+  finished_at?: string | null
 }
 
 export type DashboardActionInsert = {
@@ -196,3 +200,4 @@ export type Database = {
     CompositeTypes: Record<string, never>
   }
 }
+

@@ -19,17 +19,60 @@ import { displayDealName } from '../utils/dealPresentation'
 
 export const reviewStatuses = ['REVIEW', 'PENDING_APPROVAL', 'PENDING', 'NEW'] as const
 export const pendingStatuses = reviewStatuses
-export const reviewPageSize = 25
+export const reviewPageSize = 20
 export const reviewModeBatchSize = 20
-export const dealsPageSize = 50
+export const dealsPageSize = 40
+export const productsPageSize = 40
 
 const postedStatuses = ['POSTED']
 const rejectedStatuses = ['REJECTED']
 const unprocessedActionStatuses = ['PENDING', 'PROCESSING'] as const
 
-function realtimeChannelName(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+const dealListSelect = `
+  id,
+  created_at,
+  source,
+  original_amazon_url,
+  amazon_url,
+  affiliate_url,
+  asin,
+  parent_asin,
+  product_family_key,
+  canonical_product_name,
+  variant_label,
+  variant_count,
+  telegram_url,
+  telegram_date,
+  product_name,
+  product_name_guess,
+  product_image,
+  price,
+  claimed_price,
+  claimed_discount,
+  verified_title,
+  verified_price,
+  verified_at,
+  verified_availability,
+  verified_image,
+  verification_status,
+  post_verification_code,
+  post_verification_message,
+  caption,
+  generated_caption,
+  status,
+  published_message_id,
+  source_trust,
+  deal_score,
+  quality_score,
+  confidence_score,
+  deal_grade,
+  score_reasons,
+  risk_flags,
+  category,
+  subcategory,
+  amazon_price_drop_percent`
+const dealDetailSelect = `${dealListSelect}, source_message_id, source_text, category_confidence, category_source`
+const dashboardActionSelect = 'id, deal_id, action, requested_by, status, note, result, created_at, processed_at, processing_started_at, finished_at'
 
 function requireSupabase() {
   if (!supabase) {
@@ -119,6 +162,13 @@ export type HotNowFilters = {
   limit?: number
 }
 
+export type ProductCatalogFilters = {
+  categoryFocus?: CategoryFocus
+  search?: string
+  sort?: 'last_verified' | 'best_price' | 'variants' | 'history' | 'name'
+  page?: number
+  pageSize?: number
+}
 function freshnessCutoff(freshness: FreshnessFilter | undefined) {
   const value = freshness ?? '24h'
   if (value === 'all') return null
@@ -215,7 +265,7 @@ export async function fetchReviewDeals(filters: ReviewQueueFilters = {}) {
   const from = page * pageSize
   const to = from + pageSize - 1
 
-  const query = applyReviewFilters(client.from('deals').select('*', { count: 'exact' }), filters)
+  const query = applyReviewFilters(client.from('deals').select(dealListSelect, { count: 'exact' }), filters)
   const { data, error, count } = await orderReviewQuery(query, filters.sort).range(from, to)
 
   if (error) throw error
@@ -225,7 +275,7 @@ export async function fetchReviewDeals(filters: ReviewQueueFilters = {}) {
 export async function fetchReviewDealStreamBatch(filters: ReviewQueueFilters = {}, cursor?: ReviewCursor | null) {
   const client = requireSupabase()
   const pageSize = filters.pageSize ?? reviewModeBatchSize
-  let query = applyReviewFilters(client.from('deals').select('*', { count: cursor ? undefined : 'exact' }), filters)
+  let query = applyReviewFilters(client.from('deals').select(dealListSelect, { count: cursor ? undefined : 'exact' }), filters)
 
   if (cursor) {
     query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
@@ -294,7 +344,7 @@ export async function fetchPendingActionsForDeals(dealIds: number[]) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .in('deal_id', dealIds)
     .in('status', [...unprocessedActionStatuses])
     .order('created_at', { ascending: false })
@@ -307,7 +357,7 @@ export async function fetchLatestPendingActionForDeal(dealId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('deal_id', dealId)
     .in('status', [...unprocessedActionStatuses])
     .order('created_at', { ascending: false })
@@ -335,14 +385,16 @@ export async function fetchReviewModeCount(filters: ReviewQueueFilters = {}) {
 export async function fetchHotNowDeals(filters: HotNowFilters = {}) {
   const client = requireSupabase()
   const recentCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString()
-  const limit = filters.limit ?? 120
+  const limit = filters.limit ?? 12
 
   let query = client
     .from('deals')
-    .select('*')
+    .select(dealListSelect)
     .in('status', [...reviewStatuses])
     .not('verified_price', 'is', null)
     .gte('verified_at', recentCutoff)
+    .order('deal_score', { ascending: false, nullsFirst: false })
+    .order('source_trust', { ascending: false, nullsFirst: false })
     .order('verified_at', { ascending: false, nullsFirst: false })
     .limit(limit)
 
@@ -359,9 +411,9 @@ export async function fetchOverviewData(categoryFocus?: CategoryFocus) {
   startOfToday.setHours(0, 0, 0, 0)
 
   const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const todayBase = () => applyCategoryFocus(client.from('deals').select('*'), categoryFocus).gte('created_at', startOfToday.toISOString())
-  const pendingBase = () => applyCategoryFocus(client.from('deals').select('*'), categoryFocus).in('status', [...reviewStatuses])
-  const highScoringBase = () => applyCategoryFocus(client.from('deals').select('*'), categoryFocus)
+  const todayBase = () => applyCategoryFocus(client.from('deals').select(dealListSelect, { count: 'exact' }), categoryFocus).gte('created_at', startOfToday.toISOString()).limit(300)
+  const pendingBase = () => applyCategoryFocus(client.from('deals').select(dealListSelect, { count: 'exact' }), categoryFocus).in('status', [...reviewStatuses]).order('created_at', { ascending: false }).limit(24)
+  const highScoringBase = () => applyCategoryFocus(client.from('deals').select(dealListSelect), categoryFocus)
     .in('status', [...reviewStatuses])
     .not('deal_score', 'is', null)
     .order('deal_score', { ascending: false })
@@ -384,9 +436,9 @@ export async function fetchOverviewData(categoryFocus?: CategoryFocus) {
     todayBase(),
     pendingBase(),
     highScoringBase(),
-    fetchHotNowDeals({ categoryFocus, limit: 120 }),
-    client.from('deals').select('id, category, subcategory').gte('created_at', startOfToday.toISOString()),
-    client.from('watcher_health').select('*').order('id', { ascending: true }),
+    fetchHotNowDeals({ categoryFocus, limit: 12 }),
+    applyCategoryFocus(client.from('deals').select('id, category, subcategory').gte('created_at', startOfToday.toISOString()).limit(300), categoryFocus),
+    client.from('watcher_health').select('id, last_seen, status, candidates, last_error').order('id', { ascending: true }),
     client.from('product_catalog').select('asin', { count: 'exact', head: true }),
     client.from('product_catalog').select('asin', { count: 'exact', head: true }).eq('active', true),
     client
@@ -422,6 +474,10 @@ export async function fetchOverviewData(categoryFocus?: CategoryFocus) {
       pendingDashboardActions: pendingDashboardActions.count ?? 0,
       failedDashboardActions: failedDashboardActions.count ?? 0,
     },
+    counters: {
+      detectedToday: todayDeals.count ?? todayDeals.data?.length ?? 0,
+      pendingReview: pendingDeals.count ?? pendingDeals.data?.length ?? 0,
+    },
   }
 }
 
@@ -434,7 +490,7 @@ export async function fetchAllDeals(filters: DealsArchiveFilters = {}) {
 
   let query = client
     .from('deals')
-    .select('*', { count: 'exact' })
+    .select(dealListSelect, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to)
 
@@ -464,7 +520,7 @@ export async function fetchAllDeals(filters: DealsArchiveFilters = {}) {
 
 export async function fetchDealSources() {
   const client = requireSupabase()
-  const { data, error } = await client.from('deals').select('source').not('source', 'is', null).order('source')
+  const { data, error } = await client.from('deals').select('source').not('source', 'is', null).order('source').limit(500)
 
   if (error) throw error
   return Array.from(new Set((data ?? []).map((deal) => deal.source).filter(Boolean))).sort()
@@ -476,7 +532,7 @@ export async function fetchDealsForSourceAnalytics() {
     .from('deals')
     .select('id,created_at,source,status,deal_score,source_trust')
     .order('created_at', { ascending: false })
-    .limit(5000)
+    .limit(40)
 
   if (error) throw error
   return data
@@ -486,7 +542,7 @@ export async function fetchDealSightings(asin: string) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('deal_sightings')
-    .select('*')
+    .select('id, created_at, asin, source, source_message_id, claimed_price, claimed_discount, amazon_url')
     .eq('asin', asin)
     .order('created_at', { ascending: false })
     .limit(25)
@@ -499,7 +555,7 @@ export async function fetchDealActions(dealId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('deal_id', dealId)
     .order('created_at', { ascending: false })
     .limit(10)
@@ -512,7 +568,7 @@ export async function fetchDealById(dealId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('deals')
-    .select('*')
+    .select(dealDetailSelect)
     .eq('id', dealId)
     .maybeSingle()
 
@@ -524,7 +580,7 @@ export async function fetchDashboardActionById(actionId: number) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('dashboard_actions')
-    .select('*')
+    .select(dashboardActionSelect)
     .eq('id', actionId)
     .single()
 
@@ -548,66 +604,10 @@ export async function createDashboardAction(dealId: number, action: DashboardAct
   return data
 }
 
-export function subscribeToDealChanges(onChange: () => void) {
-  const client = requireSupabase()
-  let debounceTimer: number | null = null
-  const debouncedChange = () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    debounceTimer = window.setTimeout(onChange, 350)
-  }
-  const channel = client
-    .channel(realtimeChannelName('dashboard-deal-changes'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'deals' }, () => {
-      debouncedChange()
-    })
-    .subscribe()
-
-  return () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    void client.removeChannel(channel)
-  }
-}
-
-export function subscribeToDashboardActionChanges(onChange: () => void) {
-  const client = requireSupabase()
-  let debounceTimer: number | null = null
-  const debouncedChange = () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    debounceTimer = window.setTimeout(onChange, 350)
-  }
-  const channel = client
-    .channel(realtimeChannelName('dashboard-action-changes'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_actions' }, debouncedChange)
-    .subscribe()
-
-  return () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    void client.removeChannel(channel)
-  }
-}
-
-export function subscribeToWatcherHealthChanges(onChange: () => void) {
-  const client = requireSupabase()
-  let debounceTimer: number | null = null
-  const debouncedChange = () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    debounceTimer = window.setTimeout(onChange, 350)
-  }
-  const channel = client
-    .channel(realtimeChannelName('watcher-health-changes'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'watcher_health' }, debouncedChange)
-    .subscribe()
-
-  return () => {
-    if (debounceTimer) window.clearTimeout(debounceTimer)
-    void client.removeChannel(channel)
-  }
-}
-
 export type OverviewData = Awaited<ReturnType<typeof fetchOverviewData>>
 export async function fetchWatcherHealth() {
   const client = requireSupabase()
-  const { data, error } = await client.from('watcher_health').select('*').order('id', { ascending: true })
+  const { data, error } = await client.from('watcher_health').select('id, last_seen, status, candidates, last_error').order('id', { ascending: true })
 
   if (error) throw error
   return data
@@ -632,32 +632,62 @@ export async function fetchProductCatalog() {
   const client = requireSupabase()
   const { data, error } = await client
     .from('product_catalog')
-    .select('*')
+    .select('asin, product_name, product_image, amazon_url, affiliate_url, last_seen_price, best_seen_price, last_checked_at, last_seen_on_deals_at, times_seen, active, created_at, updated_at')
     .order('last_seen_on_deals_at', { ascending: false, nullsFirst: false })
-    .limit(5000)
+    .limit(40)
 
   if (error) throw error
   return data
 }
 
-export async function fetchProductCatalogDeals(categoryFocus?: CategoryFocus) {
+export async function fetchProductCatalogDeals(filters: ProductCatalogFilters = {}) {
   const client = requireSupabase()
+  const pageSize = filters.pageSize ?? productsPageSize
+  const page = filters.page ?? 0
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
   let query = client
     .from('deals')
-    .select('*')
-    .order('verified_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(5000)
+    .select(dealListSelect, { count: 'exact' })
 
-  query = applyCategoryFocus(query, categoryFocus)
-  const { data, error } = await query
+  query = applyCategoryFocus(query, filters.categoryFocus)
+  query = applyDealSearch(query, filters.search)
+
+  if (filters.sort === 'best_price') {
+    query = query.order('verified_price', { ascending: true, nullsFirst: false }).order('claimed_price', { ascending: true, nullsFirst: false })
+  } else if (filters.sort === 'history') {
+    query = query.order('deal_score', { ascending: false, nullsFirst: false }).order('verified_at', { ascending: false, nullsFirst: false })
+  } else if (filters.sort === 'name') {
+    query = query.order('canonical_product_name', { ascending: true, nullsFirst: false })
+  } else {
+    query = query.order('verified_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
+  }
+
+  const { data, error, count } = await query.range(from, to)
 
   if (error) throw error
-  return hydrateDealProductImages(client, data ?? [])
+  return { deals: await hydrateDealProductImages(client, data ?? []), count: count ?? 0, hasMore: to + 1 < (count ?? 0) }
 }
-
 export type SourceDeal = Pick<Deal, 'id' | 'created_at' | 'source' | 'status' | 'deal_score' | 'source_trust'>
 export type DealSightingsData = DealSighting[]
 export type WatcherHealthData = WatcherHealth[]
 export type DashboardActionData = DashboardAction[]
 export type ProductCatalogData = ProductCatalogItem[]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

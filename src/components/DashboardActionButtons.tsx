@@ -13,6 +13,7 @@ type DashboardActionButtonsProps = {
   emphasis?: 'default' | 'review'
   actions?: DashboardActionKind[]
   onActionCreated?: (action?: DashboardActionKind, dashboardAction?: DashboardAction) => void
+  onActionCompleted?: (dashboardAction: DashboardAction) => void | Promise<void>
   controller?: DashboardActionController
   onReviewDeal?: () => void
 }
@@ -43,14 +44,21 @@ export function DashboardActionButtons({
   emphasis = 'default',
   actions,
   onActionCreated,
+  onActionCompleted,
   controller,
   onReviewDeal,
 }: DashboardActionButtonsProps) {
   const internalController = useDashboardAction({
     dealId: deal.id,
     initialAction: pendingAction ?? null,
-    onDone: (dashboardAction) => onActionCreated?.(dashboardAction.action, dashboardAction),
-    onFailed: (dashboardAction) => onActionCreated?.(dashboardAction.action, dashboardAction),
+    onDone: async (dashboardAction) => {
+      onActionCreated?.(dashboardAction.action, dashboardAction)
+      await onActionCompleted?.(dashboardAction)
+    },
+    onFailed: async (dashboardAction) => {
+      onActionCreated?.(dashboardAction.action, dashboardAction)
+      await onActionCompleted?.(dashboardAction)
+    },
   })
   const actionController = controller ?? internalController
   const activeAction = actionController.actionType
@@ -68,10 +76,12 @@ export function DashboardActionButtons({
     <div className={compact ? 'space-y-2' : 'space-y-3'}>
       {showLocalStatus && !compact && activeState !== 'success' ? (
         <ActionStatus
+          deal={deal}
           action={actionController.action}
           state={activeState}
           error={actionController.error}
           onCheckAgain={() => void actionController.checkAgain()}
+          onRetry={() => void actionController.retry()}
           onReviewDeal={onReviewDeal}
           compact={compact}
         />

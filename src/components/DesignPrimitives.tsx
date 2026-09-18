@@ -1,4 +1,5 @@
 import { ImageOff, TrendingDown } from 'lucide-react'
+import { useState } from 'react'
 import { normalizeGrade } from '../services/deals'
 import type { Deal } from '../types/database'
 import { formatCurrency, formatPercent, realObservedDrop } from '../utils/dealPresentation'
@@ -182,12 +183,14 @@ export function ProductImageFrame({
   alt?: string
   size?: 'small' | 'medium' | 'large'
 }) {
+  const [failed, setFailed] = useState(false)
   const sizeClass = size === 'small' ? 'size-12' : size === 'medium' ? 'size-20' : 'aspect-square w-full'
+  const showImage = Boolean(src && !failed)
 
   return (
     <div className={`grid shrink-0 place-items-center overflow-hidden rounded-lg bg-[#121d23] ring-1 ring-white/[0.1] ${sizeClass}`}>
-      {src ? (
-        <img src={src} alt={alt} className="h-full w-full object-contain p-2" loading="lazy" />
+      {showImage ? (
+        <img src={src ?? ''} alt={alt} className="h-full w-full object-contain p-2" loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
         <ImageOff className="text-slate-600" size={size === 'small' ? 18 : 30} aria-hidden="true" />
       )}
@@ -231,3 +234,4 @@ export function PriceIntelligence({ deal, compact = false }: { deal: Deal; compa
     </div>
   )
 }
+

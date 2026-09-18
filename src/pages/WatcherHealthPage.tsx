@@ -1,10 +1,9 @@
 import { Activity, AlertTriangle, Clock } from 'lucide-react'
-import { useEffect } from 'react'
 import { FreshnessStatus } from '../components/FreshnessStatus'
 import { PageHeader } from '../components/PageHeader'
 import { EmptyState, ErrorState, LoadingSkeleton } from '../components/StateViews'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { fetchWatcherHealth, subscribeToWatcherHealthChanges } from '../services/deals'
+import { fetchWatcherHealth } from '../services/deals'
 import type { WatcherHealth } from '../types/database'
 
 function isStale(watcher: WatcherHealth) {
@@ -25,14 +24,10 @@ function stateStyle(state: 'online' | 'stale' | 'error') {
 }
 
 export function WatcherHealthPage() {
-  const { data, error, isLoading, isRefreshing, isConfigured, lastUpdated, reload } = useAsyncData(fetchWatcherHealth, [], {
+  const { data, error, isLoading, isRefreshing, isConfigured, lastUpdated } = useAsyncData(fetchWatcherHealth, [], {
     refreshIntervalMs: 15000,
   })
 
-  useEffect(() => {
-    if (!isConfigured) return undefined
-    return subscribeToWatcherHealthChanges(reload)
-  }, [isConfigured, reload])
 
   return (
     <>
@@ -88,3 +83,5 @@ export function WatcherHealthPage() {
     </>
   )
 }
+
+

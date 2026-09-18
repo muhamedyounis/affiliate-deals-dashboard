@@ -10,7 +10,7 @@ import { ControlShell, MetricTile, Pill, Surface } from '../components/DesignPri
 import { PageHeader } from '../components/PageHeader'
 import { EmptyState, ErrorState, LoadingSkeleton } from '../components/StateViews'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { fetchReviewQueueData, reviewPageSize, subscribeToDashboardActionChanges, subscribeToDealChanges, type FreshnessFilter, type ReviewQueueFilters } from '../services/deals'
+import { fetchReviewQueueData, reviewPageSize, type FreshnessFilter, type ReviewQueueFilters } from '../services/deals'
 import type { Deal } from '../types/database'
 import { groupDealsByFamily, rankFamiliesForHotNow } from '../utils/dealPresentation'
 
@@ -35,7 +35,7 @@ const sortOptions = [
   { value: 'price', label: 'Lowest price' },
   { value: 'trust', label: 'Highest confidence' },
 ] as const
-const pageSizeOptions = [25, 50, 100] as const
+const pageSizeOptions = [20, 40, 100] as const
 
 type RouteValue = (typeof routeFilters)[number]['value']
 type GradeValue = (typeof gradeFilters)[number]
@@ -90,15 +90,6 @@ export function ReviewQueuePage() {
     resetPage()
   }, [focus])
 
-  useEffect(() => {
-    if (!isConfigured) return undefined
-    const unsubscribeDeals = subscribeToDealChanges(reload)
-    const unsubscribeActions = subscribeToDashboardActionChanges(reload)
-    return () => {
-      unsubscribeDeals()
-      unsubscribeActions()
-    }
-  }, [isConfigured, reload])
 
   useEffect(() => {
     const next = new URLSearchParams()
@@ -302,7 +293,9 @@ export function ReviewQueuePage() {
 
       {data && data.count > 0 ? <div className="mt-5">{pagination}</div> : null}
 
-      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} onDealUpdated={setSelectedDeal} />
     </>
   )
 }
+
+

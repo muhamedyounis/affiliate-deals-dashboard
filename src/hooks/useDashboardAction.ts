@@ -10,8 +10,8 @@ import type { DashboardAction, DashboardActionKind, DashboardActionStatus, Json 
 
 export type DashboardActionUiState = 'idle' | 'submitting' | 'queued' | 'processing' | 'success' | 'failed' | 'timeout'
 
-const pollIntervalMs = 2500
-const timeoutMs = 100000
+const pollIntervalMs = 2000
+const timeoutMs = 90000
 const terminalResetMs = 1200
 
 type UseDashboardActionOptions = {
@@ -47,22 +47,15 @@ export function dashboardActionErrorMessage(action: DashboardAction | null) {
   return action.note || 'Action failed'
 }
 
-export function dashboardActionPriceChange(action: DashboardAction | null) {
+export function dashboardActionPriceChange(action: DashboardAction | null, postVerificationCode?: string | null) {
   const result = resultObject(action?.result ?? null)
   if (!result) return null
 
-  const code = result.code
-  const error = result.error
   const approved = result.approved_price
   const live = result.live_price
   const difference = result.price_difference_percent
 
-  const isPriceChanged =
-    code === 'PRICE_CHANGED_BEFORE_POST'
-    || (typeof error === 'string' && error.toUpperCase().includes('PRICE_CHANGED_BEFORE_POST'))
-    || (approved !== undefined && live !== undefined)
-
-  if (!isPriceChanged) return null
+  if (postVerificationCode !== 'PRICE_CHANGED') return null
 
   return {
     approvedPrice: typeof approved === 'number' || typeof approved === 'string' ? approved : null,
@@ -86,6 +79,7 @@ export function useDashboardAction({
   const [startedAt, setStartedAt] = useState<number | null>(initialAction ? Date.now() : null)
   const terminalNotifiedRef = useRef<Set<string>>(new Set())
   const actionRef = useRef<DashboardAction | null>(initialAction ?? null)
+  const timeoutCheckRef = useRef<number | null>(null)
 
   const applyAction = useCallback((nextAction: DashboardAction) => {
     actionRef.current = nextAction
@@ -114,6 +108,7 @@ export function useDashboardAction({
     setState('idle')
     setError(null)
     setStartedAt(null)
+    timeoutCheckRef.current = null
   }, [])
 
   const execute = useCallback(async (actionType: DashboardActionKind) => {
@@ -184,7 +179,9 @@ export function useDashboardAction({
     fetchActiveActionForDeal(dealId)
       .then((pendingAction) => {
         if (cancelled) return
-        if (pendingAction) {
+        // A create may have completed while this recovery read was in flight.
+        // Never replace that exact action with another active action for the deal.
+        if (pendingAction && !actionRef.current) {
           applyAction(pendingAction)
           setStartedAt(Date.now())
         } else if (actionRef.current?.deal_id !== dealId) {
@@ -216,9 +213,28 @@ export function useDashboardAction({
 
     async function poll() {
       if (!actionRef.current?.id) return
-      if (startedAt && Date.now() - startedAt > timeoutMs) {
-        setState('timeout')
-        onTimeout?.(actionRef.current)
+      if (startedAt && Date.now() - startedAt >= timeoutMs) {
+        if (timeoutCheckRef.current === actionRef.current.id) return
+        timeoutCheckRef.current = actionRef.current.id
+
+        // Realtime and the regular poll can both miss a transition. Make one
+        // last exact-ID read before declaring the action timed out.
+        try {
+          const finalAction = await fetchDashboardActionById(actionRef.current.id)
+          if (cancelled) return
+          applyAction(finalAction)
+          notifyTerminal(finalAction)
+          if (!isTerminal(finalAction.status)) {
+            setState('timeout')
+            onTimeout?.(finalAction)
+          }
+        } catch (caughtError) {
+          if (!cancelled) {
+            setState('timeout')
+            setError(caughtError instanceof Error ? caughtError.message : 'Unable to verify action status')
+            onTimeout?.(actionRef.current)
+          }
+        }
         return
       }
 

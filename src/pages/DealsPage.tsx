@@ -189,7 +189,7 @@ export function DealsPage() {
         </>
       ) : null}
 
-      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} onDealUpdated={setSelectedDeal} />
     </>
   )
 }

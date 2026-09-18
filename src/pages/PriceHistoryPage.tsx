@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { CategoryFocusControl } from '../components/CategoryFocusControl'
 import { useCategoryFocus } from '../components/CategoryFocusContext'
 import { DealDetailsDrawer } from '../components/DealDetailsDrawer'
@@ -9,14 +9,11 @@ import { Surface } from '../components/DesignPrimitives'
 import { PageHeader } from '../components/PageHeader'
 import { EmptyState, ErrorState, LoadingSkeleton } from '../components/StateViews'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { fetchProductCatalogDeals } from '../services/deals'
+import { fetchProductCatalogDeals, productsPageSize, type ProductCatalogFilters } from '../services/deals'
 import type { Deal } from '../types/database'
 import {
-  currentDealPrice,
   groupDealsByFamily,
-  historySignal,
   rankFamiliesForHotNow,
-  variantLabel,
   verifiedTime,
 } from '../utils/dealPresentation'
 
@@ -36,37 +33,36 @@ function timeValue(value: string | null) {
 
 export function PriceHistoryPage() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortValue>('last_verified')
+  const [page, setPage] = useState(0)
+  const deferredSearch = useDeferredValue(search)
   const { focus } = useCategoryFocus()
-  const loader = useMemo(() => () => fetchProductCatalogDeals(focus), [focus])
+
+  const filters = useMemo<ProductCatalogFilters>(() => ({
+    categoryFocus: focus,
+    search: deferredSearch,
+    sort,
+    page,
+    pageSize: productsPageSize,
+  }), [deferredSearch, focus, page, sort])
+  const loader = useMemo(() => () => fetchProductCatalogDeals(filters), [filters])
   const { data, error, isLoading, isRefreshing, isConfigured, lastUpdated } = useAsyncData(loader, [loader], {
     refreshIntervalMs: 60000,
   })
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<SortValue>('last_verified')
+
+  useEffect(() => {
+    setPage(0)
+  }, [focus, deferredSearch, sort])
 
   const families = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    const grouped = groupDealsByFamily(data ?? []).filter((family) => {
-      if (!query) return true
-      return [family.title, family.key, ...family.deals.flatMap((deal) => [deal.asin, deal.parent_asin, variantLabel(deal)])]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(query))
-    })
-
-    if (sort === 'best_price') {
-      return grouped.sort((left, right) => (currentDealPrice(left.primary) ?? Number.MAX_SAFE_INTEGER) - (currentDealPrice(right.primary) ?? Number.MAX_SAFE_INTEGER))
-    }
+    const grouped = groupDealsByFamily(data?.deals ?? [])
     if (sort === 'variants') return grouped.sort((left, right) => right.deals.length - left.deals.length)
-    if (sort === 'history') {
-      return grouped.sort((left, right) => {
-        const leftSignal = Math.abs(Math.min(0, historySignal(left.primary).percentBelow30d ?? 0))
-        const rightSignal = Math.abs(Math.min(0, historySignal(right.primary).percentBelow30d ?? 0))
-        return rightSignal - leftSignal
-      })
-    }
-    if (sort === 'name') return grouped.sort((left, right) => left.title.localeCompare(right.title))
     return rankFamiliesForHotNow(grouped).sort((left, right) => timeValue(verifiedTime(right.primary)) - timeValue(verifiedTime(left.primary)))
-  }, [data, search, sort])
+  }, [data?.deals, sort])
+
+  const pageStart = data?.deals.length ? page * productsPageSize + 1 : 0
+  const pageEnd = data?.deals.length ? page * productsPageSize + data.deals.length : 0
 
   return (
     <>
@@ -122,17 +118,26 @@ export function PriceHistoryPage() {
       {families.length > 0 ? (
         <>
           <div className="mb-3 text-sm text-slate-400">
-            Showing {families.length} product families from {(data ?? []).length} observed child deal rows
+            Showing {pageStart}-{pageEnd} of {data?.count ?? 0} observed child deal rows / {families.length} families on this page
           </div>
           <div className="space-y-1.5">
             {families.map((family) => (
               <ProductFamilyCard key={family.key} family={family} onOpen={setSelectedDeal} compact />
             ))}
           </div>
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <button type="button" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="min-h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600 hover:bg-white/5">
+              Previous
+            </button>
+            <span className="text-sm text-slate-400">Page {page + 1}</span>
+            <button type="button" disabled={!data?.hasMore} onClick={() => setPage((current) => current + 1)} className="min-h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600 hover:bg-white/5">
+              Next
+            </button>
+          </div>
         </>
       ) : null}
 
-      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} onDealUpdated={setSelectedDeal} />
     </>
   )
 }

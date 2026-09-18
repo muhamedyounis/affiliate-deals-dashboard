@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { GradeBadge } from '../components/DealBadges'
 import { DealAge } from '../components/DealAge'
@@ -21,9 +21,6 @@ import {
   isRejectedStatus,
   isTelegramAlertedStatus,
   normalizeGrade,
-  subscribeToDealChanges,
-  subscribeToDashboardActionChanges,
-  subscribeToWatcherHealthChanges,
 } from '../services/deals'
 import type { DatabaseUsage, Deal, WatcherHealth } from '../types/database'
 import {
@@ -256,22 +253,11 @@ export function OverviewPage() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const { focus } = useCategoryFocus()
   const overviewLoader = useMemo(() => () => fetchOverviewData(focus), [focus])
-  const { data, error, isLoading, isRefreshing, isConfigured, lastUpdated, reload } = useAsyncData(overviewLoader, [overviewLoader], {
+  const { data, error, isLoading, isRefreshing, isConfigured, lastUpdated } = useAsyncData(overviewLoader, [overviewLoader], {
     refreshIntervalMs: 30000,
   })
   const databaseUsage = useAsyncData(fetchDatabaseUsage, [])
 
-  useEffect(() => {
-    if (!isConfigured) return undefined
-    const unsubscribeDeals = subscribeToDealChanges(reload)
-    const unsubscribeActions = subscribeToDashboardActionChanges(reload)
-    const unsubscribeWatcher = subscribeToWatcherHealthChanges(reload)
-    return () => {
-      unsubscribeDeals()
-      unsubscribeActions()
-      unsubscribeWatcher()
-    }
-  }, [isConfigured, reload])
 
   const summary = useMemo(() => {
     const todayDeals = data?.todayDeals ?? []
@@ -290,10 +276,10 @@ export function OverviewPage() {
     const postedToday = todayDeals.filter((deal) => isPostedStatus(deal.status)).length
 
     return {
-      dealsDetectedToday: todayDeals.length,
+      dealsDetectedToday: data?.counters.detectedToday ?? todayDeals.length,
       sentToTelegramToday,
       dashboardOnlyToday,
-      pendingReview: data?.pendingDeals.length ?? 0,
+      pendingReview: data?.counters.pendingReview ?? data?.pendingDeals.length ?? 0,
       hotDealsToday: todayDeals.filter((deal) => normalizeGrade(deal.deal_grade) === 'HOT').length,
       postedToday,
       rejectedToday: todayDeals.filter((deal) => isRejectedStatus(deal.status)).length,
@@ -639,7 +625,10 @@ export function OverviewPage() {
         </div>
       ) : null}
 
-      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} onDealUpdated={setSelectedDeal} />
     </>
   )
 }
+
+
+

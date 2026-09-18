@@ -16,6 +16,17 @@ type AsyncDataOptions = {
   refetchOnFocus?: boolean
 }
 
+function asyncErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const maybeError = error as { message?: unknown; details?: unknown; code?: unknown }
+    const message = typeof maybeError.message === 'string' ? maybeError.message : null
+    const details = typeof maybeError.details === 'string' ? maybeError.details : null
+    const code = typeof maybeError.code === 'string' ? maybeError.code : null
+    return [message, details, code ? `Code: ${code}` : null].filter(Boolean).join(' / ') || 'Unable to load data'
+  }
+  return 'Unable to load data'
+}
 export function useAsyncData<T>(
   loader: () => Promise<T>,
   dependencies: readonly unknown[] = [],
@@ -65,7 +76,7 @@ export function useAsyncData<T>(
         if (isMounted) {
           setState((current) => ({
             data: current.data,
-            error: error instanceof Error ? error : new Error('Unable to load data'),
+            error: error instanceof Error ? error : new Error(asyncErrorMessage(error)),
             isLoading: false,
             isRefreshing: false,
             lastUpdated: current.lastUpdated,
@@ -112,3 +123,4 @@ export function useAsyncData<T>(
 
   return { ...state, reload }
 }
+

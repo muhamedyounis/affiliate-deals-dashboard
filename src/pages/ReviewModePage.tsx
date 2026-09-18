@@ -22,8 +22,6 @@ import {
   isPostedStatus,
   isRejectedStatus,
   reviewModeBatchSize,
-  subscribeToDashboardActionChanges,
-  subscribeToDealChanges,
   type ReviewCursor,
   type ReviewQueueFilters,
 } from '../services/deals'
@@ -306,19 +304,6 @@ export function ReviewModePage() {
     }
   }, [activeFamilies.length, fetchNextBatch, isFetchingMore, serverExhausted])
 
-  useEffect(() => {
-    if (!isConfigured) return undefined
-    const refreshOperationalState = () => {
-      refreshEligibleCount()
-      if (activeFamilies.length <= prefetchThreshold) void fetchNextBatch()
-    }
-    const unsubscribeDeals = subscribeToDealChanges(refreshOperationalState)
-    const unsubscribeActions = subscribeToDashboardActionChanges(refreshOperationalState)
-    return () => {
-      unsubscribeDeals()
-      unsubscribeActions()
-    }
-  }, [activeFamilies.length, fetchNextBatch, isConfigured, refreshEligibleCount])
 
 
   const actionController = useDashboardAction({
@@ -344,9 +329,15 @@ export function ReviewModePage() {
       )
       refreshCounts()
     },
-    onFailed: () => {
+    onFailed: async (failedAction) => {
       setActionHistoryRefresh((current) => current + 1)
       setActionNotice(null)
+      if (failedAction.deal_id) {
+        const latestDeal = await fetchDealById(failedAction.deal_id)
+        if (latestDeal && mountedRef.current) {
+          setDealOverrides((current) => new Map(current).set(latestDeal.id, latestDeal))
+        }
+      }
       refreshCounts()
     },
     onTimeout: () => {
@@ -657,6 +648,7 @@ export function ReviewModePage() {
               <div className="mt-4 space-y-3">
                 {actionController.state !== 'idle' && actionController.state !== 'success' ? (
                   <ActionStatus
+                    deal={deal}
                     action={displayedPendingAction}
                     state={actionController.state}
                     error={actionController.error}
@@ -695,9 +687,10 @@ export function ReviewModePage() {
             <DashboardActionButtons deal={deal} pendingAction={displayedPendingAction} emphasis="review" actions={['POST']} onActionCreated={handleActionCreated} controller={actionController} />
           </div>
 
-          <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+          <DealDetailsDrawer deal={selectedDeal} onClose={() => setSelectedDeal(null)} onDealUpdated={setSelectedDeal} />
         </section>
       ) : null}
     </>
   )
 }
+
